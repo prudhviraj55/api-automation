@@ -1,0 +1,188 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'java'
+}
+
+group = 'com.example'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
+}
+
+test {
+    useJUnitPlatform()
+    // Always run tests (do not treat prior results as up-to-date/cacheable) so HTTP calls hit the live API each run.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+    // Track overall suite result for downstream tasks.
+    afterSuite { desc, result ->
+        if (!desc.parent) {
+            project.ext.testFailed = result.failedTestCount > 0
+        }
+    }
+}
+
+tasks.register("uploadCurlReport") {
+    group = "reporting"
+    description = "Upload curl report to ingest API and log response attributes"
+    onlyIf { project.ext.has("testFailed") && project.ext.testFailed }
+
+    doLast {
+        def reportFile = file("build/reports/curl-report.txt")
+        def buildId = findProperty("buildId") ?: "build-" + new Date().format("yyyyMMddHHmmss")
+        // Persist the resolved build id for downstream tasks.
+        project.ext.resolvedBuildId = buildId
+
+        if (!reportFile.exists()) {
+            logger.lifecycle("uploadCurlReport: report not found at ${reportFile}")
+            return
+        }
+
+        logger.lifecycle("uploadCurlReport: using buildId=${buildId}")
+
+        def stdout = new ByteArrayOutputStream()
+        def stderr = new ByteArrayOutputStream()
+        def result = exec {
+            commandLine "curl",
+                    "--silent",
+                    "--show-error",
+                    "--request", "POST",
+                    "--url", "http://localhost:9000/api/ingest/build-report-file",
+                    "--header", "accept: application/json",
+                    "--header", "content-type: multipart/form-data",
+                    "--form", "file=@${reportFile.absolutePath}",
+                    "--form", "build_id=${buildId}",
+                    "--form", "skip_embeddings=true"
+            standardOutput = stdout
+            errorOutput = stderr
+            ignoreExitValue true
+        }
+
+        def responseBody = stdout.toString("UTF-8").trim()
+        def errorBody = stderr.toString("UTF-8").trim()
+
+        if (result.exitValue != 0) {
+            logger.warn("uploadCurlReport: curl failed with exit ${result.exitValue}; stderr='${errorBody}'; body='${responseBody}'")
+            project.ext.uploadSuccess = false
+            return
+        }
+
+        if (!responseBody) {
+            logger.warn("uploadCurlReport: empty response body")
+            project.ext.uploadSuccess = false
+            return
+        }
+
+        // Check if response looks like JSON
+        def trimmedBody = responseBody.trim()
+        if (!trimmedBody.startsWith("{") && !trimmedBody.startsWith("[")) {
+            logger.warn("uploadCurlReport: non-JSON response received; body='${responseBody}'")
+            project.ext.uploadSuccess = false
+            return
+        }
+
+        try {
+            def parsed = new JsonSlurper().parseText(responseBody)
+            logger.lifecycle("uploadCurlReport: node_id=${parsed.node_id}, status=${parsed.status}, embedding_model=${parsed.embedding_model}, chunks=${parsed.chunks_created}, embeddings_status=${parsed.embeddings_status}, build_id=${buildId}")
+            logger.lifecycle("uploadCurlReport: related_node_ids=${parsed.related_node_ids}")
+            logger.lifecycle("uploadCurlReport: summary_text=${parsed.summary_text}")
+            project.ext.uploadSuccess = true
+        } catch (Exception e) {
+            logger.warn("uploadCurlReport: failed to parse response JSON (${e.message}); body='${responseBody}'")
+            project.ext.uploadSuccess = false
+        }
+    }
+}
+
+tasks.test.finalizedBy(tasks.uploadCurlReport)
+
+tasks.register("analyzeAndFix") {
+    group = "reporting"
+    description = "Call analyze-and-fix API using the build id from upload step"
+    onlyIf { project.ext.has("testFailed") && project.ext.testFailed && project.ext.has("resolvedBuildId") && project.ext.has("uploadSuccess") && project.ext.uploadSuccess }
+
+    doLast {
+        def buildId = (project.hasProperty("resolvedBuildId")
+                ? project.property("resolvedBuildId")
+                : (findProperty("buildId") ?: "build-" + new Date().format("yyyyMMddHHmmss")))
+        def payload = [
+                build_id        : buildId,
+                github_repo_path: "https://github.com/prudhviraj55/app-test-pipeline.git",
+                action          : "FIX",
+                by_pass_rag     : true,
+                hours_lookback  : 24,
+                target_branch   : "main",
+                dry_run         : false
+        ]
+
+        logger.lifecycle("analyzeAndFix: calling analyze API for buildId=${buildId} (allowing up to 10 minutes)")
+
+        def stdout = new ByteArrayOutputStream()
+        def stderr = new ByteArrayOutputStream()
+        def result = exec {
+            commandLine "curl",
+                    "--silent",
+                    "--show-error",
+                    "--write-out", "\nHTTP_STATUS:%{http_code}",
+                    "--request", "POST",
+                    "--url", "http://localhost:9000/api/analyze-and-fix",
+                    "--header", "content-type: application/json",
+                    "--data", JsonOutput.toJson(payload),
+                    "--max-time", "1200" // allow the API up to 10 minutes; requirement was at least 5 minutes
+            standardOutput = stdout
+            errorOutput = stderr
+            ignoreExitValue true
+        }
+
+        def rawOutput = stdout.toString("UTF-8")
+        def httpStatus = null
+        def responseBody = rawOutput.trim()
+        def matcher = rawOutput =~ /(?s)(.*)\nHTTP_STATUS:(\d{3})$/
+        if (matcher.matches()) {
+            responseBody = matcher[0][1].trim()
+            httpStatus = matcher[0][2]
+        }
+        def errorBody = stderr.toString("UTF-8").trim()
+
+        if (result.exitValue != 0) {
+            logger.warn("analyzeAndFix: curl failed with exit ${result.exitValue}; stderr='${errorBody}'; body='${responseBody}'")
+            return
+        }
+
+        if (!responseBody) {
+            logger.warn("analyzeAndFix: empty response body")
+            return
+        }
+
+        try {
+            def parsed = new JsonSlurper().parseText(responseBody)
+            logger.lifecycle("analyzeAndFix: http_status=${httpStatus}, raw_body=${responseBody}")
+            logger.lifecycle("analyzeAndFix: status=${parsed.status}, repo_cloned=${parsed.repo_cloned}, changes_applied=${parsed.changes_applied}, pr_created=${parsed.pr_created}, build_id=${buildId}")
+            logger.lifecycle("analyzeAndFix: node_id=${parsed.node_id}, summary_text=${parsed.summary_text}")
+            if (!parsed.status || !parsed.node_id || !parsed.summary_text) {
+                logger.lifecycle("analyzeAndFix: full parsed response=${parsed}")
+            }
+        } catch (Exception e) {
+            logger.warn("analyzeAndFix: failed to parse response JSON (${e.message}); body='${responseBody}'")
+        }
+    }
+}
+
+tasks.uploadCurlReport.finalizedBy(tasks.analyzeAndFix)

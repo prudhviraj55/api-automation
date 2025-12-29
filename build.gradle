@@ -123,13 +123,14 @@ tasks.register("analyzeAndFix") {
                 ? project.property("resolvedBuildId")
                 : (findProperty("buildId") ?: "build-" + new Date().format("yyyyMMddHHmmss")))
         def payload = [
-                build_id        : buildId,
-                github_repo_path: "https://github.com/prudhviraj55/app-test-pipeline.git",
-                action          : "FIX",
-                by_pass_rag     : true,
-                hours_lookback  : 24,
-                target_branch   : "main",
-                dry_run         : false
+                build_id            : buildId,
+                github_repo_path    : "https://github.com/prudhviraj55/app-test-pipeline.git",
+                automation_repo_path: "https://github.com/prudhviraj55/api-automation.git",
+                action              : "FIX",
+                by_pass_rag         : true,
+                hours_lookback      : 24,
+                target_branch       : "main",
+                dry_run             : false
         ]
 
         logger.lifecycle("analyzeAndFix: calling analyze API for buildId=${buildId} (allowing up to 10 minutes)")

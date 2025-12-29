@@ -14,6 +14,7 @@ final class CurlReporter {
 
     private static final Path REPORT_PATH = Path.of("build", "reports", "curl-report.txt");
     private static final String PIPELINE_REPO = "https://github.com/prudhviraj55/app-test-pipeline.git";
+    private static final String AUTOMATION_SUITE_REPO = "https://github.com/prudhviraj55/api-automation.git";
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     private CurlReporter() {
@@ -52,7 +53,8 @@ final class CurlReporter {
             sb.append("Body:\n").append(response.body()).append("\n");
 
             // Attach repo reference at end of the test log entry.
-            sb.append("Repo: ").append(PIPELINE_REPO).append("\n\n");
+            sb.append("Repo: ").append(PIPELINE_REPO).append("\n");
+            sb.append("Automation Repo: ").append(AUTOMATION_SUITE_REPO).append("\n\n");
 
             Files.writeString(REPORT_PATH, sb.toString(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -106,7 +108,6 @@ final class CurlReporter {
                     int statusCode = Integer.parseInt(actual.replaceAll("\"", ""));
                     if (statusCode >= 500) {
                         sb.append("- Fix action: API returns 500 error. Check server logs and fix the internal server error in ")
-                          .append(valueOrDefault(failureDetails.suspectFile, "unknown"))
                           .append(". Review exception handling and null checks.\n");
                     } else if (statusCode >= 400) {
                         sb.append("- Fix action: API returns ").append(statusCode)
@@ -127,7 +128,8 @@ final class CurlReporter {
                 }
             }
             
-            sb.append("Repo: ").append(PIPELINE_REPO).append("\n\n");
+            sb.append("Repo: ").append(PIPELINE_REPO).append("\n");
+            sb.append("Automation Repo: ").append(AUTOMATION_SUITE_REPO).append("\n\n");
 
             Files.writeString(REPORT_PATH, sb.toString(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -156,7 +158,7 @@ final class CurlReporter {
         return curl.toString();
     }
 
-    private static String valueOrDefault(String value, String defaultValue) {
+private static String valueOrDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value;
     }
 

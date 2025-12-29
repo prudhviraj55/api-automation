@@ -34,7 +34,7 @@ class OrderApiTest {
     @Test
     void createOrder(TestInfo testInfo) throws Exception {
         Map<String, Object> payload = Map.of(
-                "customerd", "cust-123",
+"customerId", "cust-123",
                 "productSku", "sku-456",
                 "quantity", 2,
                 "shippingAddress", "123 Main St, Springfield",

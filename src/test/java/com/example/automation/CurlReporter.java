@@ -89,7 +89,7 @@ final class CurlReporter {
             sb.append("Error: ").append(error.getClass().getSimpleName())
                     .append(" - ").append(error.getMessage()).append("\n");
             sb.append("Failure Summary:\n");
-            sb.append("- Test: ").append(testName).append("\n");
+sb.append("- Assertion: ").append(valueOrDefault(failureDetails == null ? null : failureDetails.assertion, "unknown")).append(" ==> expected: <").append(failureDetails.expected).append("> but was: <").append(failureDetails.actual).append(">\n");
             sb.append("- Assertion: ").append(valueOrDefault(failureDetails == null ? null : failureDetails.assertion, "unknown")).append("\n");
             sb.append("- Expected: ").append(valueOrDefault(failureDetails == null ? null : failureDetails.expected, "unknown")).append("\n");
             sb.append("- Actual: ").append(valueOrDefault(failureDetails == null ? null : failureDetails.actual, "unknown")).append("\n");

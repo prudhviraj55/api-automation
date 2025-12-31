@@ -87,7 +87,7 @@ class OrderApiTest {
     void getOrderStatus(TestInfo testInfo) throws Exception {
         String orderId = "abcd-12345";
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/orders/" + orderId + "/statuses"))
+.uri(URI.create(baseUrl + "/api/orders/" + orderId + "/status"))
                 .timeout(Duration.ofSeconds(10))
                 .GET()
                 .build();

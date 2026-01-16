@@ -31,7 +31,42 @@ class OrderApiTest {
         CurlReporter.resetReport();
     }
 
-    @Test
+@BeforeAll
+    static void createOrderForTest() throws Exception {
+        String orderId = "abcd-12345";
+        Map<String, Object> payload = Map.of(
+            "customerId", "cust-123",
+            "productSku", "sku-456",
+            "quantity", 2,
+            "shippingAddress", "123 Main St, Springfield",
+            "unitPrice", 19.99,
+            "deliveryNotes", "Leave at porch",
+            "promoCode", "SPRING10",
+            "giftWrap", true,
+            "requestedDeliveryDate", "2024-05-30"
+        );
+
+        String body = MAPPER.writeValueAsString(payload);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/orders"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) {
+            CurlReporter.logFailure("createOrderForTest", request, body, null, e, null);
+            throw e;
+        }
+
+        assertTrue(response.statusCode() == 200 || response.statusCode() == 201,
+                "Expected 200/201 from POST /api/orders but got " + response.statusCode() + " with body: " + response.body());
+        assertFalse(response.body().isEmpty(), "Response body should contain order info or error details.");
+    }
     void createOrder(TestInfo testInfo) throws Exception {
         Map<String, Object> payload = Map.of(
 "customerId", "cust-123",
@@ -83,7 +118,42 @@ class OrderApiTest {
         }
     }
 
-    @Test
+@BeforeAll
+    static void createOrderForTest() throws Exception {
+        String orderId = "abcd-12345";
+        Map<String, Object> payload = Map.of(
+            "customerId", "cust-123",
+            "productSku", "sku-456",
+            "quantity", 2,
+            "shippingAddress", "123 Main St, Springfield",
+            "unitPrice", 19.99,
+            "deliveryNotes", "Leave at porch",
+            "promoCode", "SPRING10",
+            "giftWrap", true,
+            "requestedDeliveryDate", "2024-05-30"
+        );
+
+        String body = MAPPER.writeValueAsString(payload);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/orders"))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response;
+        try {
+            response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) {
+            CurlReporter.logFailure("createOrderForTest", request, body, null, e, null);
+            throw e;
+        }
+
+        assertTrue(response.statusCode() == 200 || response.statusCode() == 201,
+                "Expected 200/201 from POST /api/orders but got " + response.statusCode() + " with body: " + response.body());
+        assertFalse(response.body().isEmpty(), "Response body should contain order info or error details.");
+    }
     void getOrderStatus(TestInfo testInfo) throws Exception {
         String orderId = "abcd-12345";
         HttpRequest request = HttpRequest.newBuilder()
